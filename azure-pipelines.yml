@@ -3,31 +3,86 @@
 # Add steps that publish symbols, save build artifacts, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/apps/windows/dot-net
 
+```yaml
 trigger:
 - main
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
-variables:
-  solution: '**/*.sln'
-  buildPlatform: 'Any CPU'
-  buildConfiguration: 'Release'
+stages:
 
-steps:
-- task: NuGetToolInstaller@1
+# =========================
+# STAGE 1 - CI
+# =========================
+- stage: CI
+  displayName: "Continuous Integration"
 
-- task: NuGetCommand@2
-  inputs:
-    restoreSolution: '$(solution)'
+  jobs:
+  - job: BuildJob
+    displayName: "Build Application"
 
-- task: VSBuild@1
-  inputs:
-    solution: '$(solution)'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    steps:
 
-- task: VSTest@2
-  inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '10.x'
+
+    - script: dotnet restore
+      displayName: "Restore Dependencies"
+
+    - script: dotnet build --configuration Release
+      displayName: "Build Project"
+
+# =========================
+# STAGE 2 - TESTING
+# =========================
+- stage: Testing
+  displayName: "Run Unit Tests"
+
+  dependsOn: CI
+
+  jobs:
+  - job: TestJob
+    displayName: "Execute Tests"
+
+    steps:
+
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '10.x'
+
+    - script: dotnet test --configuration Release --logger trx
+      displayName: "Run Unit Tests"
+
+# =========================
+# STAGE 3 - DELIVERY
+# =========================
+- stage: Delivery
+  displayName: "Publish Application"
+
+  dependsOn: Testing
+
+  jobs:
+  - job: DeliveryJob
+    displayName: "Publish Artifacts"
+
+    steps:
+
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '10.x'
+
+    - script: dotnet publish -c Release -o $(Build.ArtifactStagingDirectory)
+      displayName: "Publish Application"
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: 'CalculadoraApp'
+      displayName: "Upload Artifact"
+```
+
